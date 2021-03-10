@@ -53,20 +53,29 @@ def rating_analysis(data):
     data = data[["Provider State", "Overall Rating"]]
     stuff = data.groupby("Provider State", as_index=False)["Overall Rating"].mean()
 
-    sns.catplot(x='Provider State', y='Overall Rating', data=stuff, aspect=15/5, kind="bar")
+    #sns.catplot(x='Provider State', y='Overall Rating', data=stuff, aspect=15/5, kind="bar")
     
     plt.savefig("ratings.png")
 
-def provider_salary(data):
+def provider_vs_rating(data):
 
     data = data[["Ownership Type", "Overall Rating"]]
     grouped = data.groupby("Ownership Type", as_index=False)["Overall Rating"].mean()
     is_profit = grouped["Ownership Type"].str.contains("For profit")
-    print(grouped[is_profit].mean())
+    is_profit_value = float(grouped[is_profit].mean())
     non_profit = grouped["Ownership Type"].str.contains("Non profit")
-    print(grouped[non_profit].mean())
+    non_profit_value = float(grouped[non_profit].mean())
     gov_profit = grouped["Ownership Type"].str.contains("Government")
-    print(grouped[gov_profit].mean())
+    gov_profit_value = float(grouped[gov_profit].mean())
+
+    stuff = pd.DataFrame([{"Ownership Type": 'For Profit', 'Rating': is_profit_value},
+                          {"Ownership Type": 'Government', 'Rating': gov_profit_value},
+                          {"Ownership Type": 'Non Profit', 'Rating': non_profit_value}])
+    print(stuff.head)
+
+    sns.barplot(x='Ownership Type', y='Rating', data=stuff)
+    
+    plt.savefig("ratings.png")
 
 
 def main():
@@ -74,7 +83,7 @@ def main():
     data = pd.read_csv("Data.csv", encoding='ISO-8859-1')
     #staffing_hours_data(data)
     #rating_analysis(data)
-    provider_salary(data)
+    provider_vs_rating(data)
 
 
 if __name__ == '__main__':
