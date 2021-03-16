@@ -162,7 +162,7 @@ def provider_vs_rating_geo(data):
     of bursing home they are.
     """
 
-    fig, [[ax1, ax2], [ax3, ax4]] = plt.subplots(2, figsize=(20, 10), ncols=2)
+    fig, [ax1, ax2, ax3] = plt.subplots(1, 3, figsize=(30, 10))
     abbreviations = pd.read_csv("csvData.csv")
     country = gpd.read_file("geo.json")
     country = country[(country['NAME'] != 'Alaska') & 
