@@ -186,7 +186,7 @@ def plot_state_map_pct(data):
     with an overall rating 5 for each state. 
     """
     total = data.groupby('Provider State', as_index = False)['Overall Rating'].sum()
-    # print(total)
+
     five = data[data['Overall Rating'] == 5]
     five = five.groupby('Provider State', as_index = False)['Overall Rating'].sum()
     five['Pct Rating 5'] = (five['Overall Rating'] / total['Overall Rating']) * 100
@@ -196,7 +196,7 @@ def plot_state_map_pct(data):
         z = five['Pct Rating 5'].astype(float), # Data to be color-coded
         locationmode = 'USA-states', # set of locations match entries in `locations`
         colorscale = 'Magma',
-        colorbar_title = "Count",
+        colorbar_title = "Percent",
         marker_line_color='white',
         marker_line_width=0.5
     ))
@@ -208,14 +208,31 @@ def plot_state_map_pct(data):
     fig.show()
 
 
+def rating_resident_num_correlation(data): 
+    rating = data.groupby('Provider State', as_index = False)['Overall Rating'].mean()
+    num_residents = data.groupby('Provider State', as_index = False)['Average Number of Residents per Day'].mean()
+    num_residents['Average Rating'] = rating['Overall Rating']
+
+    fig = px.scatter(num_residents, x='Average Number of Residents per Day', y='Average Rating', 
+                     trendline="ols")
+
+    fig.update_layout(
+        title_text = 'Average Overall Rating vs. Avg Number of Residents',
+    )
+
+    fig.show()
+
 
 
 def main():
     data = col_selection()
     data = data_cleaning(data)
+
+    # Extra geospatial data 
     state = gpd.read_file('practice/tl_2020_us_state.shp')
     zip_code = gpd.read_file('practice/cb_2019_us_zcta510_500k.shp')
     states = gpd.read_file('practice/gz_2010_us_040_00_5m.json')
+    shape = gpd.read_file('practice/geojson-counties-fips.json')
 
    
     # split_data(data)
@@ -231,7 +248,7 @@ def main():
 
     plot_state_map_avg(data)
     plot_state_map_pct(data)
-    # plot_map(data, shape)
+    rating_resident_num_correlation(data)
 
 
 if __name__ == '__main__':
