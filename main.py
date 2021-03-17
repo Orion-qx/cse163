@@ -10,7 +10,9 @@ import numpy
 import pandas as pd
 import seaborn as sns
 import geopandas as gpd
-#import plotly.express as px
+import plotly
+import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import requests
 import sklearn
@@ -32,12 +34,15 @@ def col_selection():
     """
     Data preparation. Only keep columns we are interested in.
     """
-    df = pd.read_csv("Data.csv", encoding="ISO-8859-1")
+    df = pd.read_csv("NH_ProviderInfo_Feb2021.csv", encoding="ISO-8859-1")
 
     data = df[['Provider State', 'Provider Zip Code', 'Ownership Type', 'Number of Certified Beds',
             'Average Number of Residents per Day', 'Date First Approved to Provide Medicare and Medicaid Services', 
             'Overall Rating', 'Reported Total Nurse Staffing Hours per Resident per Day', 
-            'Total Weighted Health Survey Score']]
+            "Total Weighted Health Survey Score",
+            "Rating Cycle 1 Total Health Score",
+            "Rating Cycle 2 Total Health Score",
+            "Rating Cycle 3 Total Health Score"]]
     return data
 
 
@@ -92,37 +97,193 @@ def col_plots(data):
     #####
 
 #def classify(data):
+
+def get_US_data():
+    country = gpd.read_file("geo.json")
+    country = country[(country['NAME'] != 'Alaska') & 
+                      (country['NAME'] != 'Hawaii') & 
+                      (country['NAME'] != "District of Columbia") &
+                      (country['NAME'] != 'Puerto Rico')]
+    return country
+
+
+def health_vs_rating(data):
+
+    mask1 = data["Total Weighted Health Survey Score"].isna()
+    data = data[~mask1]
+    data = data.groupby("Provider State", as_index=False).mean()
+    abbreviations = pd.read_csv("csvData.csv")
+    country = get_US_data()
+
+    data = data.merge(abbreviations, left_on="Provider State", right_on="Code", how="left")
+    data = country.merge(data, left_on="NAME", right_on="State", how="left")
+
+    fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(10, 5))
+
+    data.plot(column="Overall Rating", ax=ax1, legend=True, cmap='OrRd')
+    data.plot(column="Total Weighted Health Survey Score", ax=ax2, legend=True, cmap='OrRd')
+
+    ax1.set_xlabel("Overall Rating Graph")
+    ax2.set_xlabel("Weighted Health Survey Score")
+
+    fig.tight_layout()
+    plt.savefig("Health_vs_Overall_Rating.png")
+
+
+    
+def health_geo_graphs(cycle1, cycle2, cycle3):
+
+    test = cycle3["Rating Cycle 3 Total Health Score"] == "."
+    cycle3 = cycle3[~test]
+    cycle1["Rating Cycle 1 Total Health Score"] = (cycle1["Rating Cycle 1 Total Health Score"].astype(float))
+    cycle2["Rating Cycle 2 Total Health Score"] = (cycle2["Rating Cycle 2 Total Health Score"].astype(float))
+    cycle3["Rating Cycle 3 Total Health Score"] = (cycle3["Rating Cycle 3 Total Health Score"].astype(float))
+
+    cycle1 = cycle1.groupby("Provider State", as_index=False)["Rating Cycle 1 Total Health Score"].mean()
+    cycle2 = cycle2.groupby("Provider State", as_index=False)["Rating Cycle 2 Total Health Score"].mean()
+    cycle3 = cycle3.groupby("Provider State", as_index=False)["Rating Cycle 3 Total Health Score"].mean()
+    
+    fig, [ax1, ax2, ax3] = plt.subplots(1, 3, figsize=(15, 5))
+    
+    abbreviations = pd.read_csv("csvData.csv")
+    country = gpd.read_file("geo.json")
+    country = get_US_data()
+
+    cycle1 = cycle1.merge(abbreviations, left_on="Provider State", right_on="Code", how="left")
+    cycle2 = cycle2.merge(abbreviations, left_on="Provider State", right_on="Code", how="left")
+    cycle3 = cycle3.merge(abbreviations, left_on="Provider State", right_on="Code", how="left")
+
+    cycle1 = country.merge(cycle1, left_on="NAME", right_on="State", how="left")
+    cycle2 = country.merge(cycle2, left_on="NAME", right_on="State", how="left")
+    cycle3 = country.merge(cycle3, left_on="NAME", right_on="State", how="left")
+
+    ax1.set_xlabel("Cycle 1 health Reports")
+    ax2.set_xlabel("Cycle 2 health Reports")
+    ax3.set_xlabel("Cycle 3 health Reports")
+
+    cycle1.plot(column="Rating Cycle 1 Total Health Score", ax=ax1, cmap='OrRd')
+    cycle2.plot(column="Rating Cycle 2 Total Health Score", ax=ax2, cmap='OrRd')
+    cycle3.plot(column="Rating Cycle 3 Total Health Score", ax=ax3, legend=True, cmap='OrRd')
+
+    fig.tight_layout()
+    plt.savefig("Health_Ratings_Map.png")
     
 
-def plot_staffing_hours(info):
-    sns.catplot(x='Provider State', y='percent', data=info, aspect=15/5, kind="bar")
+def health_analysis(data):
     
+    new = data[["Total Weighted Health Survey Score",
+                "Rating Cycle 1 Total Health Score",
+                "Rating Cycle 2 Total Health Score",
+                "Rating Cycle 3 Total Health Score",
+                'Overall Rating', "Provider State"]]
+
+    mask1 = new["Total Weighted Health Survey Score"].isna()
+    mask11 = new["Overall Rating"].isna()
+    cycle1 = new[["Total Weighted Health Survey Score", 
+                  "Rating Cycle 1 Total Health Score",
+                  'Overall Rating', "Provider State"]]
+    cycle1 = cycle1[~mask1 & ~mask11]
+
+    mask2 = new["Total Weighted Health Survey Score"].isna()
+    mask21 = new["Overall Rating"].isna()
+    cycle2 = new[["Total Weighted Health Survey Score", 
+                  "Rating Cycle 2 Total Health Score",
+                  'Overall Rating', "Provider State"]]
+    cycle2 = cycle2[~mask2 & ~mask21]
+
+    mask3 = new["Total Weighted Health Survey Score"].isna()
+    mask31 = new["Overall Rating"].isna()
+    cycle3 = new[["Total Weighted Health Survey Score", 
+                  "Rating Cycle 3 Total Health Score",
+                  'Overall Rating', "Provider State"]]
+    cycle3 = cycle3[~mask3 & ~mask31]
+
+    health_geo_graphs(cycle1, cycle2, cycle3)
+    health_vs_rating(new[["Total Weighted Health Survey Score",
+                'Overall Rating', "Provider State"]])
+    
+
+def capacity_analysis(data):
+
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    new = data[['Average Number of Residents per Day',
+                'Number of Certified Beds',
+                'Overall Rating']]
+
+    mask1 = new['Number of Certified Beds'].isna()
+    mask2 = new["Average Number of Residents per Day"].isna()
+    mask3 = new["Overall Rating"].isna()
+
+    rnew = new[~mask1 & ~mask2 & ~mask3]
+
+    rnew["Percentage Filled"] = rnew["Average Number of Residents per Day"] / rnew['Number of Certified Beds']
+
+    sns.kdeplot(
+        data=rnew, x='Number of Certified Beds',
+        y="Overall Rating",
+        palette="crest",
+        log_scale=1.2, ax=ax[0]
+        )
+
+    sns.scatterplot(
+        data=rnew, y="Overall Rating",
+        x="Percentage Filled",
+        palette="crest",
+        ax=ax[1], 
+        )
+
+    ax[0].title.set_text("Ratings vs Number of Certified Beds")
+    ax[1].title.set_text("Ratings vs Percentage of Beds Filled")
+    fig.tight_layout()
+    plt.savefig("sp1.png")
+
+
+def plot_staffing_hours(info):
+
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+
+    sns.kdeplot(
+        data=info, x="Reported Total Nurse Staffing Hours per Resident per Day",
+        y="Average Number of Residents per Day",
+        hue="Overall Rating",
+        fill=True, common_norm=False, palette="crest",
+        alpha=.5,
+        log_scale=1.2, ax=ax[0]
+        )
+    
+
+    sns.kdeplot(
+        data=info, x="Reported Total Nurse Staffing Hours per Resident per Day",
+        y="Overall Rating",
+        palette="crest",
+        log_scale=1.2, ax=ax[1]
+        )
+
+    sns.kdeplot(
+        data=info, y="Overall Rating",
+        x="Average Number of Residents per Day",
+        palette="crest",
+        log_scale=1.2, ax=ax[2]
+        )
+    ax[0].title.set_text("Average Residents Per Day vs Nurse Staffing Hours Per Day")
+    ax[1].title.set_text("Ratings vs Nurse Staffing Hours Per Day")
+    ax[2].title.set_text("Ratings vs Average Residents Per Day")
+    fig.tight_layout()
     plt.savefig("sp.png")
 
 def staffing_hours_data(data):
-    Fnew = data
     
-    new = Fnew[['Provider State', 'Average Number of Residents per Day',
+    new = data[['Average Number of Residents per Day',
        'Reported Total Nurse Staffing Hours per Resident per Day',
-       'Case-Mix Total Nurse Staffing Hours per Resident per Day',
-       'Adjusted Total Nurse Staffing Hours per Resident per Day',
        'Overall Rating']]
-    mask1 = new['Reported Total Nurse Staffing Hours per Resident per Day'].isna()
-    mask2 = new['Case-Mix Total Nurse Staffing Hours per Resident per Day'].isna()
-    mask3 = new['Adjusted Total Nurse Staffing Hours per Resident per Day'].isna()
 
-    snew = new[mask1 & mask2 & mask3]
-    snew = snew.groupby("Provider State", as_index=False)["Overall Rating"].count()
-    snew = snew.rename(columns={"Overall Rating" : "removed"})
+    mask1 = new['Reported Total Nurse Staffing Hours per Resident per Day'].isna()
+    mask2 = new["Average Number of Residents per Day"].isna()
+    mask3 = new["Overall Rating"].isna()
 
     rnew = new[~mask1 & ~mask2 & ~mask3]
-    rnew = rnew.groupby("Provider State", as_index=False)["Overall Rating"].count()
-    rnew = rnew.rename(columns={"Overall Rating" : "available"})
 
-    Lnew = rnew.merge(snew, left_on="Provider State", right_on="Provider State")
-    Lnew["percent"] = Lnew["removed"] / (Lnew["available"] + Lnew["removed"])
-
-    plot_staffing_hours(Lnew)
+    plot_staffing_hours(rnew)
 
 def rating_analysis(data):
 
@@ -150,25 +311,24 @@ def provider_vs_rating(data):
     ax = sns.boxplot(x="Ownership adjusted", y="Overall Rating", data=box_data, ax=ax1)
     ax.set(xticklabels=[])
     ax.set(xlabel=None)
+    ax.set_title(("Average Overall Ratings for Different Nursing Home Types"))
     fig.savefig("ratings.png")
 
-def provider_vs_rating_geo(data):
+def provider_vs_rating_geo(data_org):
     """
     This function takes the data about
-    the nusgin homes and uses the geo
+    the nursing homes and uses the geo
     data to graph the overall ratings
     of the nursing homes based off
     of their location and the type
     of bursing home they are.
     """
 
-    fig, [ax1, ax2, ax3] = plt.subplots(1, 3, figsize=(30, 10))
+    data = data_org[["Provider State", "Ownership adjusted", "Overall Rating", 'Reported Total Nurse Staffing Hours per Resident per Day']]
+    fig, [ax1, ax2, ax3] = plt.subplots(1, 3, figsize=(15, 5))
+    
     abbreviations = pd.read_csv("csvData.csv")
-    country = gpd.read_file("geo.json")
-    country = country[(country['NAME'] != 'Alaska') & 
-                      (country['NAME'] != 'Hawaii') & 
-                      (country['NAME'] != "District of Columbia") &
-                      (country['NAME'] != 'Puerto Rico')]
+    country = get_US_data()
 
     data = data.merge(abbreviations, left_on="Provider State", right_on="Code", how="left")
 
@@ -180,13 +340,21 @@ def provider_vs_rating_geo(data):
     government = country["Ownership adjusted"] == "Government"
     govt = country[government]
 
+    print(profit['Reported Total Nurse Staffing Hours per Resident per Day'].mean())
+    print(nprofit['Reported Total Nurse Staffing Hours per Resident per Day'].mean())
+    print(govt['Reported Total Nurse Staffing Hours per Resident per Day'].mean())
+
     ax1.set_xlabel("For profit")
     ax2.set_xlabel("Non profit")
     ax3.set_xlabel("Government")
 
-    profit.plot(column="Overall Rating", legend=True, ax=ax1, cmap='OrRd')
-    nprofit.plot(column="Overall Rating", legend=True, ax=ax2, cmap='OrRd')
-    govt.plot(column="Overall Rating", legend=True, ax=ax3, cmap='OrRd')
+    ax2.set_title("Overall Ratings for Different Nursing Home Types")
+    
+    profit.plot(column="Overall Rating", ax=ax1, cmap='OrRd')
+    nprofit.plot(column="Overall Rating", ax=ax2, cmap='OrRd')
+    govt.plot(column="Overall Rating", ax=ax3, legend=True, cmap='OrRd')
+
+    fig.tight_layout()
     plt.savefig("US_map_ratings.png")
 
 
@@ -205,9 +373,10 @@ def main():
     # model.fit(X_train, y_train)
     # label_predictions = model.predict(features)
 
-    # staffing_hours(data)
-    # staffing_hours_data(data)
-    # rating_analysis(data)
+    #health_analysis(data)
+    #staffing_hours_data(data)
+    #capacity_analysis(data)
+    #rating_analysis(data)
     #provider_vs_rating(data)
     provider_vs_rating_geo(data)
 

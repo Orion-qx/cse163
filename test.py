@@ -96,66 +96,6 @@ def col_plots(data):
     #####
     
 
-def plot_staffing_hours(info):
-    sns.catplot(x='Provider State', y='percent', data=info, aspect=15/5, kind="bar")
-    
-    plt.savefig("sp.png")
-
-def staffing_hours_data(data):
-    Fnew = data
-    
-    new = Fnew[['Provider State', 'Average Number of Residents per Day',
-       'Reported Total Nurse Staffing Hours per Resident per Day',
-       'Case-Mix Total Nurse Staffing Hours per Resident per Day',
-       'Adjusted Total Nurse Staffing Hours per Resident per Day',
-       'Overall Rating']]
-    mask1 = new['Reported Total Nurse Staffing Hours per Resident per Day'].isna()
-    mask2 = new['Case-Mix Total Nurse Staffing Hours per Resident per Day'].isna()
-    mask3 = new['Adjusted Total Nurse Staffing Hours per Resident per Day'].isna()
-
-    snew = new[mask1 & mask2 & mask3]
-    snew = snew.groupby("Provider State", as_index=False)["Overall Rating"].count()
-    snew = snew.rename(columns={"Overall Rating" : "removed"})
-
-    rnew = new[~mask1 & ~mask2 & ~mask3]
-    rnew = rnew.groupby("Provider State", as_index=False)["Overall Rating"].count()
-    rnew = rnew.rename(columns={"Overall Rating" : "available"})
-
-    Lnew = rnew.merge(snew, left_on="Provider State", right_on="Provider State")
-    Lnew["percent"] = Lnew["removed"] / (Lnew["available"] + Lnew["removed"])
-
-    plot_staffing_hours(Lnew)
-
-def rating_analysis(data):
-
-    data = data[["Provider State", "Overall Rating"]]
-    stuff = data.groupby("Provider State", as_index=False)["Overall Rating"].mean()
-
-    #sns.catplot(x='Provider State', y='Overall Rating', data=stuff, aspect=15/5, kind="bar")
-    
-    plt.savefig("ratings.png")
-
-def provider_vs_rating(data):
-
-    data = data[["Ownership Type", "Overall Rating"]]
-    grouped = data.groupby("Ownership Type", as_index=False)["Overall Rating"].mean()
-    is_profit = grouped["Ownership Type"].str.contains("For profit")
-    is_profit_value = float(grouped[is_profit].mean())
-    non_profit = grouped["Ownership Type"].str.contains("Non profit")
-    non_profit_value = float(grouped[non_profit].mean())
-    gov_profit = grouped["Ownership Type"].str.contains("Government")
-    gov_profit_value = float(grouped[gov_profit].mean())
-
-    stuff = pd.DataFrame([{"Ownership Type": 'For Profit', 'Rating': is_profit_value},
-                          {"Ownership Type": 'Government', 'Rating': gov_profit_value},
-                          {"Ownership Type": 'Non Profit', 'Rating': non_profit_value}])
-    print(stuff.head)
-
-    sns.barplot(x='Ownership Type', y='Rating', data=stuff)
-    
-    plt.savefig("ratings.png")
-
-
 def plot_state_map_avg(data):
     """
     Using a new package plotly, creates an interactive map that plots the average Overall Rating
@@ -229,6 +169,7 @@ def main():
     data = data_cleaning(data)
 
     # Extra geospatial data 
+    
     state = gpd.read_file('practice/tl_2020_us_state.shp')
     zip_code = gpd.read_file('practice/cb_2019_us_zcta510_500k.shp')
     states = gpd.read_file('practice/gz_2010_us_040_00_5m.json')
@@ -240,11 +181,6 @@ def main():
     # model = DecisionTreeClassifier()
     # model.fit(X_train, y_train)
     # label_predictions = model.predict(features)
-
-    # staffing_hours(data)
-    # staffing_hours_data(data)
-    # rating_analysis(data)
-    # provider_vs_rating(data)
 
     plot_state_map_avg(data)
     plot_state_map_pct(data)
